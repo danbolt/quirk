@@ -1,10 +1,17 @@
+var LevelData = {
+  levelList:[
+    '0-1',
+    '0-2',
+    '0-3'
+  ],
+  currentLevel: 0
+};
+
 var Load = function () {};
 Load.prototype.preload = function () {
   this.game.load.image('sheetmap', 'asset/img/sheet.png');
 
   this.game.load.spritesheet('sheet', 'asset/img/sheet.png', 16, 16);
-
-  this.game.load.tilemap('0-1', 'asset/map/0-1.json', undefined, Phaser.Tilemap.TILED_JSON);
 
   // crisp pixel upscaling
   this.game.scale.scaleMode = Phaser.ScaleManager.SHOW_ALL;
@@ -24,7 +31,7 @@ Load.prototype.preload = function () {
   this.game.input.gamepad.start();
 };
 Load.prototype.create = function () {
-  this.game.state.start('Gameplay');
+  this.game.state.start('Gameplay', true, false, LevelData.levelList[LevelData.currentLevel]);
 };
 
 var Gameplay = function () {
@@ -33,11 +40,17 @@ var Gameplay = function () {
 
   this.map = null;
 };
+Gameplay.prototype.init = function (levelName) {
+  this.levelName = levelName;
+};
+Gameplay.prototype.preload = function () {
+  this.game.load.tilemap(this.levelName, 'asset/map/' + this.levelName + '.json', undefined, Phaser.Tilemap.TILED_JSON);
+};
 Gameplay.prototype.create = function () {
 
   this.game.physics.arcade.gravity.y = 550;
 
-  this.map = this.game.add.tilemap('0-1');
+  this.map = this.game.add.tilemap(this.levelName);
   this.map.addTilesetImage('terrain', 'sheetmap', 16, 16);
 
   this.background = this.map.createLayer('background');
@@ -48,11 +61,21 @@ Gameplay.prototype.create = function () {
   this.map.setCollisionBetween(0, 256, true, this.foreground);
 
   var playerPost = { x: 32, y: 32 };
+  this.goal = null;
+
   if (this.map.objects.gameplay) {
     this.map.objects.gameplay.forEach(function (obj) {
       if (obj.name === 'Player') {
         playerPost.x = obj.x + 16;
         playerPost.y = obj.y + 16;
+      }
+
+      if (obj.name === 'Goal') {
+        this.goal = this.game.add.sprite(obj.x, obj.y, 'sheet', 61);
+        this.game.physics.enable(this.goal, Phaser.Physics.ARCADE);
+        this.goal.animations.add('spin', [61, 62], 8, true);
+        this.goal.animations.play('spin');
+        this.goal.body.allowGravity = false;
       }
     }, this);
   }
@@ -91,6 +114,7 @@ Gameplay.prototype.create = function () {
 Gameplay.prototype.update = function () {
 
   this.game.physics.arcade.collide(this.player, this.foreground);
+  this.game.physics.arcade.overlap(this.player, this.goal, function () {}, function () { LevelData.currentLevel = (LevelData.currentLevel + 1) % LevelData.levelList.length; this.game.state.start('Gameplay', true, false, LevelData.levelList[LevelData.currentLevel]); return false; }, this);
 
   // poll keyboard keys
   if (this.game.input.keyboard.isDown(Phaser.KeyCode.RIGHT)) {
@@ -111,7 +135,7 @@ Gameplay.prototype.update = function () {
   }
 };
 Gameplay.prototype.shutdown = function () {
-  //
+  this.game.cache.removeTilemap(this.levelName);
 };
 
 var main = function () {
